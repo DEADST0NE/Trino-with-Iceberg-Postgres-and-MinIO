@@ -1,0 +1,16 @@
+{
+  "name": "test_trino_iceberg_minio",
+  "version": "1.0.0",
+  "description": "This is an example using Trino with an Iceberg connector, a Postgres metastore, and MinIO for object storage.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node src/trino-test.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "trino-client": "^0.2.8"
+  }
+}

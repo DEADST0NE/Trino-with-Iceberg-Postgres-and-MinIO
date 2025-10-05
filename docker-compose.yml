@@ -1,0 +1,71 @@
+services:
+  minio:
+    container_name: minio
+    image: minio/minio:latest
+    environment:
+      - MINIO_ROOT_USER=minio-user
+      - MINIO_ROOT_PASSWORD=minio-password
+    ports:
+      - 9001:9001
+      - 9000:9000
+    command: ["server", "/data", "--console-address", ":9001"]
+    volumes:
+      - ./.docker-data/minio:/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mc alias set minio http://localhost:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD} && mc mb minio/warehouse && mc anonymous set public minio/warehouse",
+        ]
+      interval: 2s
+      timeout: 2s
+      retries: 5
+
+  postgres:
+    image: postgres:latest
+    container_name: postgres
+    ports:
+      - 5432:5432
+    environment:
+      - POSTGRES_USER=postgres-user
+      - POSTGRES_PASSWORD=postgres-password
+      - POSTGRES_DB=iceberg
+    volumes:
+      - ./.docker-data/postgres:/var/lib/postgresql/data
+      - ./docker/migrations/pg:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres-user -d iceberg"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  trino:
+    image: "trinodb/trino:latest"
+    hostname: trino
+    volumes:
+      - ./docker/trino_config/catalog:/etc/trino/catalog
+      - ./.docker-data/trino:/data
+      - ./docker/migrations/trino:/docker-entrypoint-initdb.d
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+
+  trino-migrations:
+    image: trinodb/trino:latest
+    depends_on:
+      trino:
+        condition: service_healthy
+    volumes:
+      - ./docker/migrations/trino:/migrations
+    entrypoint: >
+      /bin/sh -c "
+      until curl -s http://trino:8080/v1/info > /dev/null; do
+        echo 'Waiting for Trino...'
+        sleep 3
+      done;
+      trino --server trino:8080 --catalog e_commerce --schema ecommerce < /migrations/table-init.sql
+      "
